@@ -118,7 +118,7 @@ where
 fn normalize<Paths, Bases>(
     paths: Paths,
     bases: Bases
-) -> CompileResult<(Vec<PathBuf>, Vec<PathBuf>)>
+) -> CompileResult<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>)>
 where
     Paths: IntoIterator,
     Paths::Item: AsRef<Path>,
@@ -183,7 +183,7 @@ where
         })
         .collect::<CompileResult<Vec<PathBuf>>>()?;
 
-    Ok((absolutized_bases, relativized_paths))
+    Ok((absolutized_bases, absolutized_paths, relativized_paths))
 }
 
 /// Compiles a list a gRPC definitions to rust modules.
@@ -215,9 +215,10 @@ where
         .check()
         .context("failed to find `protoc`, `protoc` must be availabe in `PATH`")?;
 
-    let (absolutized_includes, relativized_inputs) = normalize(inputs, includes)?;
-    let stringified_inputs = stringify_paths(relativized_inputs)?;
+    let (absolutized_includes, absolutized_inputs, relativized_paths) = normalize(inputs, includes)?;
     let stringified_includes = stringify_paths(absolutized_includes)?;
+    let stringified_inputs = stringify_paths(absolutized_inputs)?;
+    let strignified_rel_inputs = stringify_paths(relativized_paths)?;
 
     let descriptor_set = Temp::new_file()?;
 
@@ -254,14 +255,17 @@ where
     let customizations = Customize::default();
 
     write_out_generated_files(
-        grpcio_compiler::codegen::gen(descriptor_set.get_file(), stringified_inputs.as_slice()),
+        grpcio_compiler::codegen::gen(
+          descriptor_set.get_file(),
+          strignified_rel_inputs.as_slice()
+        ),
         &output
     ).context("failed to write generated grpc definitions")?;
 
     write_out_generated_files(
         protobuf_codegen::gen(
             descriptor_set.get_file(),
-            stringified_inputs.as_slice(),
+            strignified_rel_inputs.as_slice(),
             &customizations
         ),
         &output
